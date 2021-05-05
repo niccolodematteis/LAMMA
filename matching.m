@@ -137,7 +137,7 @@ end
             %limits of the 3x3 area
             xi=-1;xf=1;
             yi=-1;yf=1;
-            DCCnan = padarray(DCC,[1 1],nan,'both');
+            DCCnan = nanpadding(DCC,1);
             InterpArea = DCCnan(I1+1:I2+1,J1+1:J2+1);
             [JJ,II]=meshgrid(xi:xf,yi:yf);
             os = 1/OverSmplFactor;
@@ -152,7 +152,7 @@ end
             %limits of the 5x5 area
             xi=-2;xf=2;
             yi=-2;yf=2;
-            DCCnan = padarray(DCC,[2 2],nan,'both');
+            DCCnan = nanpadding(DCC,2);
             InterpArea = DCCnan(I1+2:I2+2,J1+2:J2+2);
             [JJ,II]=meshgrid(xi:xf,yi:yf);
             os = 1/OverSmplFactor;
@@ -189,3 +189,13 @@ end
 
 end
 
+%::::::::::::::::::::::::::::::::
+function out = nanpadding(in,padsz)
+
+[rw,cl]=size(in);
+
+out = [nan(padsz,cl+2*padsz);
+    nan(rw,padsz), in, nan(rw,padsz);
+    nan(padsz,cl+2*padsz)];
+
+end
