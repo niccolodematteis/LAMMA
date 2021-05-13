@@ -393,9 +393,17 @@ end
         if any(size(MasterImage)~=size(SlaveImage))
             error('Master and slave images must have the same size')
         end
+        %check grid
+        if all(mod(grid,1)~=0,'all') || any(grid(:)<=0)
+            error('grid must be a 1x1 or Nx2 array of positive ingers')
+        end
         %check whether maxScale is correctly defined
         if ~isempty(maxScale) && (numel(maxScale)~=1 || mod(maxScale,1)~=0)
             error('maxScale must be a positive integer')
+        elseif isempty(maxScale) && numel(grid)==1
+            maxScale = grid;
+        elseif isempty(maxScale) && numel(grid)>1
+            maxScale = size(grid,1);
         end
         %check whether seeds is correctly defined
         if ~isempty(seeds) && ...
@@ -409,10 +417,6 @@ end
         %check whether neigh is positive
         if neigh<=0 ||  mod(neigh,1)~=0
             error('neigh must be a positive integer')
-        end
-        %check grid
-        if all(mod(grid,1)~=0,'all') || any(grid(:)<=0)
-            error('grid must be a 1x1 or Nx2 array of positive ingers')
         end
         %check maxband
         if numel(maxband)~=4 || any(mod(maxband(:),1)~=0)
