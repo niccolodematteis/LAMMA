@@ -176,12 +176,12 @@ else %IRREGULAR CASE
         centroidNumber=centroidNumber*2;
         %if there are too few remaining nodes, they are all included in the
         %last grid
-        if size(grid(:,1))<=centroidNumber
-            count=count+1;
-            nodes{count}=[grid(:,1),grid(:,2)];
-        end
+
     end
-    %nodes is a cell array with Nx2 array of sparse grids
+    if size(grid(:,1))<=centroidNumber
+        count=count+1;
+        nodes{count}=[grid(:,1),grid(:,2)];
+    end    %nodes is a cell array with Nx2 array of sparse grids
     %without common nodes
 
     %take the number of scales
