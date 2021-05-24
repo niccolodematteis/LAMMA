@@ -28,7 +28,6 @@ function [DX,DY,DCC] = matching(refTile,searchTile,searchBand,varargin)
 %                displacement
 %   method:      String that indicates the similarity function. zncc or
 %                cosxcorr
-%   step:        distance between consecutive points in the search band
 %
 % OUPUT:
 %   DX          rightward motion of the refTile (px)
@@ -39,7 +38,6 @@ function [DX,DY,DCC] = matching(refTile,searchTile,searchBand,varargin)
 defaultSubPixel = false;
 defaultOverSmpl = 10;
 defaultMethod = 'cosxcorr';
-defaultStep = 1;
 
 Opt = inputParser;
 addRequired(Opt,'refTile',@isnumeric);
@@ -48,13 +46,11 @@ addRequired(Opt,'searchBand',@isnumeric);
 addParameter(Opt,'SubPixel',defaultSubPixel,@islogical);
 addParameter(Opt,'OverSmpl',defaultOverSmpl,@isnumeric);
 addParameter(Opt,'method',defaultMethod,@ischar);
-addParameter(Opt,'step',defaultStep,@isnumeric);
 
 parse(Opt,refTile,searchTile,searchBand,varargin{:});
 SubPixel = Opt.Results.SubPixel;
 OverSmplFactor = Opt.Results.OverSmpl;
 method = Opt.Results.method;
-step = Opt.Results.step;
 
 
 [refRow,refCol]=size(refTile);
@@ -90,8 +86,8 @@ switch method
         error('unrecognised method')
 end
 %loop to compute similarity matrix
-for ii=1:step:size(DCC,1)
-    for jj=1:step:size(DCC,2)
+for ii=1:size(DCC,1)
+    for jj=1:size(DCC,2)
         localTile = searchTile(ii:ii+refRow-1,jj:jj+refCol-1);
         DCC(ii,jj) = fun(A,B,localTile);
     end
@@ -181,9 +177,6 @@ end
         end
         if numel(OverSmplFactor)~=1 || OverSmplFactor<1 || mod(OverSmplFactor,1)~=0
             error('Oversamplingfactor must a positive integer')
-        end
-        if numel(step)~=1 || step<1
-            error('step must be a positive integer')
         end
     end
 
