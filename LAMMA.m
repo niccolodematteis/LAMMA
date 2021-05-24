@@ -2,7 +2,7 @@
 %       
 %   Local Adaptive Multiscale image Matching Algorithm (LAMMA)
 %       
-%       v 2020.05.05
+%       v 2020.05.24
 %
 %   https://github.com/niccolodematteis/LAMMA.git
 %
