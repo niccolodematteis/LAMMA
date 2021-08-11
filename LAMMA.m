@@ -202,7 +202,7 @@ else
         dat1=dat1(:,1)+1i*dat1(:,2);
         dat2=nodes{ii};
         dat2=dat2(:,1)+1i*dat2(:,2);
-        M=nan(numel(dat1),4);
+        M=nan(numel(dat2),4);
         parfor c=1:numel(dat2)
             [~,J] = mink( abs(dat2(c)-dat1),4 );
             M(c,:)=J;
