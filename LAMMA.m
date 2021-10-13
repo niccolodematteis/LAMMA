@@ -1,51 +1,54 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%       
+%
 %   Local Adaptive Multiscale image Matching Algorithm (LAMMA)
-%       
-%       v 2020.05.24
+%
+%       version 1.0
 %
 %   https://github.com/niccolodematteis/LAMMA.git
 %
 %       Niccolò Dematteis
+%       2021.10.13
 %
 %       This code is published under the
 %       Licence CC BY-NC 4.0
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [DX,DY,NCC,nodes,calcNumber,BDlimits] = LAMMA...
-    (MasterImage,SlaveImage,tileSz,grid,varargin)
+    (MasterImage,SlaveImage,Parameters)
 % [DX,DY,NCC,nodes,calcNumber,BDlim] = LAMMA(MasterImage,SlaveImage,tileSz,grid,options)
-%    
+%
 % INPUT:
 %   MasterImage     MxN or MxNx3 real matrix
 %   SlaveImage      MxN or MxNx3 real matrix
-%   tileSz          Positive integer. It is the side dimension of the 
-%                   squared patch where the image matching is applied
-%   grid:           Positive integer or Nx2 array. If it is a positive
-%                   integer, it is the spatial resolution of the regular 
-%                   grid M/grid X N/grid where the image matching is computed
-% OPTIONS:
-%   neigh:          Positive integer. It is the number of the neighbours
-%                   that are considered to adjust the interrogation area.
-%                   This option is valid only when using sparse grids
-%   oversampling    oversamplign factor for subpixel displacement
-%                   sensitivity
-%   tolerance       Null or positive integer. It is the tolerance term that
-%                   is added to the interrgoation area
-%   maxband         1X4 positive integer array. It is the dimension of the 
-%                   the search band in the directions [left, right, up,
-%                   down] in the first scale
-%   subpixel        Logical value. If true, the image matching is
-%                   calculated with subpixel sensitivity
-%   maxScale        Positive integer. If grid is a positive integer, it is
-%                   the spatial resolution of the coarsest regular grid. If
-%                   grid is an array, it is the number of nodes of the
-%                   first irregular grid.
-%   Method          Similarity functions: ZNCC or COSXCORR
-%   Seeds           NX2 array. Seeds contains the coordinates of the nodes
-%                   that must be added to the first grid.
-%   printInfo       Logical value. If true, some information on the
-%                   processing are displayed during the run
+%   Parameters      Struct with fields:
+%       tileSz          Positive integer. It is the side dimension of the
+%                       squared patch where the image matching is applied
+%       grid            Positive integer or Nx2 array. If it is a positive
+%                       integer, it is the spatial resolution of the regular
+%                       grid M/grid X N/grid where the image matching is computed
+%       maxband         1X4 positive integer array. It is the dimension of the
+%                       the search band in the directions [left, right, up,
+%                       down] in the first scale
+%       maxScale        Positive integer. If grid is a positive integer, it is
+%                       the spatial resolution of the coarsest regular grid. If
+%                       grid is an array, it is the number of nodes of the
+%                       first irregular grid.
+%   Optional Parameters
+%       oversampling    oversampling factor for subpixel offset
+%       neigh:          Positive integer. It is the number of the neighbours
+%                       that are considered to adjust the interrogation area.
+%                       Default is 4
+%                       This option is valid only when using sparse grids
+%       tolerance       Null or positive integer. It is the tolerance term that
+%                       is added to the interrgoation area - Default is 2
+%       Method          Similarity functions: ZNCC or COSXCORR - Default is
+%                       COSXCORR
+%       Seeds           NX2 array. Seeds contains the coordinates of the nodes
+%                       that must be added to the first grid. Default is
+%                       empty
+%       printInfo       Logical value. If true, some information on the
+%                       processing are displayed during the run - Default
+%                       is false
 % OUTPUTS:
 %   DX, DY          Cell array of the horizontal and vertical offsets
 %                   obtained with the image matching. Horizontal offsets
@@ -65,50 +68,24 @@ function [DX,DY,NCC,nodes,calcNumber,BDlimits] = LAMMA...
 %
 %--------------------------------------------------------------------------
 
-%Default values
-defaultSubPixel = true;
-defaultOverSmpl = 10;
-defaultMaxBand = [-10 10 -10 10];
-defaultTolerance = 2;
-defaultMaxScale = [];
-defaultMethod = 'cosxcorr';
-defaultNeigh = 4;
-defaultSeeds = [];
-defaultPrintInfo = false;
-
-Opt = inputParser;
-addRequired(Opt,'MasterImage',@isnumeric);
-addRequired(Opt,'SlaveImage',@isnumeric);
-addRequired(Opt,'tileSz',@isnumeric);
-addRequired(Opt,'grid',@isnumeric);
-addParameter(Opt,'SubPixel',defaultSubPixel,@islogical);
-addParameter(Opt,'OverSmpl',defaultOverSmpl,@isnumeric);
-addParameter(Opt,'Tolerance',defaultTolerance,@isnumeric);
-addParameter(Opt,'MaxScale',defaultMaxScale,@isnumeric);
-addParameter(Opt,'MaxBand',defaultMaxBand,@isnumeric);
-addParameter(Opt,'Method',defaultMethod,@ischar);
-addParameter(Opt,'Neigh',defaultNeigh,@isnumeric);
-addParameter(Opt,'Seeds',defaultSeeds,@isnumeric);
-addParameter(Opt,'printInfo',defaultPrintInfo,@islogical);
-
-parse(Opt,MasterImage,SlaveImage,tileSz,grid,varargin{:});
-SubPixel = Opt.Results.SubPixel;
-os = Opt.Results.OverSmpl;
-tolerance = Opt.Results.Tolerance;
-maxScale = Opt.Results.MaxScale;
-maxband = Opt.Results.MaxBand;
-Method = Opt.Results.Method;
-neigh = Opt.Results.Neigh;
-seeds = Opt.Results.Seeds;
-printInfo = Opt.Results.printInfo;
-
-
-%Check inputs
-[regularGrid,Pool]=CheckInputCorrectness();
-
-
+%check input
+[MasterImage,SlaveImage,Parameters]=checkInput(MasterImage,SlaveImage,Parameters);
+%get parameters
+tileSz=Parameters.tileSz;
 %for simplicity, take half the tile size
 tileSz=floor(tileSz/2);
+grid=Parameters.grid;
+maxScale=Parameters.maxScale;
+maxband=Parameters.maxband;
+neigh=Parameters.neigh;
+tolerance=Parameters.tolerance;
+method=Parameters.Method;
+seeds=Parameters.seeds;
+printInfo=Parameters.printInfo;
+os=Parameters.oversampling;
+regularGrid=Parameters.RegularGrid;
+%prepare processors pool
+Pool=load_parpool;
 
 %====================  SCALES  ================================
 %create the grids of every scale
@@ -153,9 +130,9 @@ if regularGrid %REGULAR CASE
         nodes{ii}=n2(~pun,:);
         n1=[n1;n2];
     end
-    %nodes is a cell array with Nx2 array of evenly distributed grids 
+    %nodes is a cell array with Nx2 array of evenly distributed grids
     %without common nodes
-       
+    
 else %IRREGULAR CASE
     centroidNumber=maxScale; %number of nodes of the first scale
     count=0;
@@ -173,7 +150,7 @@ else %IRREGULAR CASE
         %remove centroids before to continue with the subsequent grids
         grid(midx,:)=[];
         %now use twice the number of nodes than in the previous grid
-        centroidNumber=centroidNumber*2;
+        centroidNumber=centroidNumber*3;
         %if there are too few remaining nodes, they are all included in the
         %last grid
     end
@@ -183,7 +160,7 @@ else %IRREGULAR CASE
     end
     %nodes is a cell array with Nx2 array of sparse grids
     %without common nodes
-
+    
     %take the number of scales
     numScales=numel(nodes);
 end
@@ -202,7 +179,7 @@ else
         dat1=dat1(:,1)+1i*dat1(:,2);
         dat2=nodes{ii};
         dat2=dat2(:,1)+1i*dat2(:,2);
-        M=nan(numel(dat2),4);
+        M=nan(numel(dat1),4);
         parfor c=1:numel(dat2)
             [~,J] = mink( abs(dat2(c)-dat1),4 );
             M(c,:)=J;
@@ -231,7 +208,7 @@ for level=numScales:-1:1
         Ybm=ones(numel(X),1)*maxband(3);
         Ybp=ones(numel(X),1)*maxband(4);
     else
-%====================  ADAPTATION  ================================
+        %====================  ADAPTATION  ================================
         %reset the variables
         Ybm=[];
         Ybp=[];
@@ -270,8 +247,8 @@ for level=numScales:-1:1
     end
     %Ybm, Ybp, Xbm and Xbp are the limits of the search band in the
     %directions [down,up,left,right]
-%====================  ADAPTATION ENDS  ================================
-
+    %====================  ADAPTATION ENDS  ================================
+    
     %reset these variable
     dx=[];
     dy=[];
@@ -282,6 +259,7 @@ for level=numScales:-1:1
     n=tic;
     %if the parallel computing toolbox is available the for loop is run in
     %parallel using half the cores available on the computer
+    %parfor (jj=1:numel(X),opts)
     parfor jj=1:numel(X)
         x0=X(jj);
         y0=Y(jj);
@@ -303,7 +281,7 @@ for level=numScales:-1:1
             void(jj)=1;
         else
             void(jj)=0;
-            %take the reference patch 
+            %take the reference patch
             refTile=MasterImage(y0-tileSz:y0+tileSz,x0-tileSz:x0+tileSz);
             %take the slave patch. The limits depends on the interrogation
             %area limits
@@ -311,23 +289,19 @@ for level=numScales:-1:1
                 x0-tileSz+cm:x0+tileSz+cp);
             %check if the patches are not NaN and if they have not constant
             %values. If it occurs, the results are set to NaN
-            if all(isnan(refTile(:))) || all(isnan(searchTile(:))) ...
-                    || numel(unique(refTile(:)))==1 || numel(unique(searchTile(:)))==1
+            if all(refTile(:)==refTile(1,1)) || all(searchTile(:)==searchTile(1,1))
                 dx(jj)=nan;
                 dy(jj)=nan;
                 ncc(jj)=nan;
                 void(jj)=1;
             else
-%====================  MATCHING  ================================
+                %====================  MATCHING  ================================
                 t=tic;
                 %calculate the similarity function
-                [dx(jj),dy(jj),DCC] = matching...
-                    (refTile,searchTile,[cm,cp,rm,rp],...
-                    'subpixel',SubPixel,'oversmpl',os,...
-                    'method',Method);
+                [dx(jj),dy(jj),DCC] = matching(refTile,searchTile,[cm,cp,rm,rp],os,method)        
                 ncc(jj)=max(DCC(:));
                 timeCalc(jj)=toc(t);
-%====================  MATCHING ENDS ============================
+                %====================  MATCHING ENDS ============================
             end
         end
     end
@@ -363,111 +337,230 @@ if printInfo
 end
 
 
-%--------------------------------------------------------------------------
-    function [regularGrid, Pool]=CheckInputCorrectness
-        
+end
 
-        %check whether the parallel computing toolbox is installed
-        %if yes, create a pool of half the avaliable cores
-        if license('test','Distrib_Computing_Toolbox')
-            maxcores = str2double(getenv('NUMBER_OF_PROCESSORS'));
-            pool=gcp('nocreate');
-            if ~isempty(pool) && pool.NumWorkers~=round(maxcores/2)
-                delete(pool)
-                Pool=parpool(round(maxcores/2));
-                Pool=Pool.NumWorkers;
-            elseif isempty(pool)
-                Pool=parpool(round(maxcores/2));
-                Pool=Pool.NumWorkers;
-            else
-                Pool=pool.NumWorkers;
-            end
-        else
-            Pool=1;
-        end
-        %=======
-        
-        %convert input data in single format
-        if ~isa(MasterImage,'single') || ~isa(SlaveImage,'single')
-            MasterImage=single(MasterImage);
-            SlaveImage=single(SlaveImage);
-        end
-        %convert images in monochromatic scale if necessary
-        if size(MasterImage,3)>1
-            MasterImage=mean(MasterImage,3);
-        end
-        if size(SlaveImage,3)>1
-            SlaveImage=mean(SlaveImage,3);
-        end
-        if any(size(MasterImage)~=size(SlaveImage))
-            error('Master and slave images must have the same size')
-        end
-        %check whether seeds is correctly defined
-        if ~isempty(seeds) && ...
-                (size(seeds,2)~=2 || all(seeds<1,'all') || all(mod(seeds,1)~=0))
-            error('seeds must be a NX2 array of positive integers')
-        end
-        %check tileSz
-        if numel(tileSz)~=1 || tileSz<1 || mod(tileSz,1)~=0
-            error('tileSz must a positive integer')
-        end
-        %check whether neigh is positive
-        if neigh<=0 ||  mod(neigh,1)~=0
-            error('neigh must be a positive integer')
-        end
-        %check grid
-        if all(mod(grid,1)~=0,'all') || any(grid(:)<=0)
-            error('grid must be a 1x1 or Nx2 array of positive ingers')
-        end
-        %check whether maxScale is correctly defined
-        if ~isempty(maxScale) && (numel(maxScale)~=1 || mod(maxScale,1)~=0)
-            error('maxScale must be a positive integer')
-        elseif isempty(maxScale) && numel(grid)==1
-            maxScale = grid;
-        elseif isempty(maxScale) && numel(grid)>1
-            maxScale = size(grid,1);
-        end
-        %check maxband
-        if numel(maxband)~=4 || any(mod(maxband(:),1)~=0)
-            error('maxband must be a 1x4 array of positive integers')
-        end
-        %check tolerance
-        if numel(tolerance)~=1 || tolerance<0 || mod(tolerance,1)~=0
-            error('tolerance must a positive integer')
-        end
-        %check whether it is set a regular or irregular grid
-        if numel(grid)==1
-            regularGrid=true;
-            %check whether maxScale is correctly defined
-            if isempty(maxScale)
-                maxScale = grid;
-            elseif maxScale<grid
-                error('maxScale cannot be lower than grid')
-            end
-        elseif size(grid,2)==2 
-            regularGrid=false;
-            %check whether the Statistics Toolbox is installed for using
-            %kmedoids
-            if ~license('test','Statistics_Toolbox')
-                error('The Statistics and Machine Learning Toolbox is required for irregular nodes')
-            end
+%(((((((((((((((((((((((((((((((FUNCTIONS))))))))))))))))))))))))))))))))))
+function [MasterImage,SlaveImage,Parameters]=...
+    checkInput(MasterImage,SlaveImage,Parameters)
 
-            %check whether maxScale is correctly defined
-            if isempty(maxScale)
-                maxScale = size(grid,1);
-            elseif maxScale>size(grid,1)
-                error('maxScale must be lower than grid')
-            end
-        else
-            error('nodes must be a number or a NX2 array')
-        end
-        %check whether the oversampling option is in correct form
-        if os<1 || mod(os,1)~=0
-            error('OverSampling must be a positive integer')
-        end
+if any(size(MasterImage)~=size(SlaveImage))
+    error('Master and slave images must have the same size')
+end
+%convert input data in single format
+if ~isa(MasterImage,'single') || ~isa(SlaveImage,'single')
+    MasterImage=single(MasterImage);
+    SlaveImage=single(SlaveImage);
+end
+%convert images in monochromatic scale if necessary
+if size(MasterImage,3)>1
+    MasterImage=mean(MasterImage,3);
+end
+if size(SlaveImage,3)>1
+    SlaveImage=mean(SlaveImage,3);
+end
+%substitute nan with zeros to speedup check within parfor
+MasterImage(isnan(MasterImage))=0;
+SlaveImage(isnan(SlaveImage))=0;
+
+%check options
+if numel(Parameters.grid)==1
+    Parameters.RegularGrid=true;
+    Parameters.neigh=4;
+else
+    Parameters.RegularGrid=false;
+    if ~license('test','Statistics_Toolbox')
+        error('The Statistics and Machine Learning Toolbox is required for irregular nodes')
+    elseif ~isfield(Parameters,'neigh')
+        Parameters.neigh=4;
     end
-%--------------------------------------------------------------------------
+end
+if ~isfield(Parameters,'tolerance')
+    Parameters.tolerance=2;
+end
+if ~isfield(Parameters,'Method')
+    Parameters.Method='cosxcorr';
+end
+if ~isfield(Parameters,'seeds')
+    Parameters.seeds=[];
+end
+if ~isfield(Parameters,'printInfo')
+    Parameters.printInfo=false;
+end
+if ~isfield(Parameters,'oversampling')
+    Parameters.os=10;
+end
 
 end
+%--------------------------------------------------------------------------
+
+%--------------------------------------------------------------------------
+function Pool=load_parpool
+%check whether the parallel computing toolbox is installed
+%if yes, create a pool of half the avaliable cores
+if license('test','Distrib_Computing_Toolbox')
+    maxcores = str2double(getenv('NUMBER_OF_PROCESSORS'));
+    pool=gcp('nocreate');
+    if ~isempty(pool) && pool.NumWorkers~=round(maxcores/2)
+        delete(pool)
+        Pool=parpool(round(maxcores/2));
+        Pool=Pool.NumWorkers;
+    elseif isempty(pool)
+        Pool=parpool(round(maxcores/2));
+        Pool=Pool.NumWorkers;
+    else
+        Pool=pool.NumWorkers;
+    end
+else
+    Pool=1;
+end
+%the following command distributes in blocks the nodes among the cores
+%this should be useful if there are many nan or zero patches
+% opts = parforOptions(gcp('nocreate'),'RangePartitionMethod','fixed',...
+%     'SubrangeSize',1000);
+end
+%--------------------------------------------------------------------------
+
+%--------------------------------------------------------------------------
+function [DX,DY,DCC] = matching(refTile,searchTile,searchBand,OverSmplFactor,method)
+%
+% INPUT:
+%   refTile:        MxN reference patch
+%   searchTile:     PxR reference patch P>=M; R>=N
+%   searchBand:     1x4 positive integer array. Width of the search band in
+%                   the directions [left right up down]
+%   oversampl:      numerical value of the subpixel sensitivity
+%   method:         String that indicates the similarity function. zncc or
+%                   cosxcorr
+%
+% OUPUT:
+%   DX          rightward motion of the refTile (px)
+%   DY          downward motion of the refTile (px)
+%   DCC         dcc matrix of the search area
+
+[refRow,refCol]=size(refTile);
+%coordinates of the similarity matrix
+[X,Y]=meshgrid(searchBand(1):searchBand(2),searchBand(3):searchBand(4));
+%initialise the similarity matrix
+DCC=zeros(size(X));
+
+%define the similarity index functions
+switch method
+    %normalized cross-correlation
+    case 'zncc'
+        A = refTile;
+        A = A-mean(A(:),'omitnan');
+        B = sum(sum(A.^2,'omitnan'),'omitnan');
+        fun = @(A,B,Y) sum(sum( A.*(Y-mean(Y(:),'omitnan')),'omitnan'),'omitnan') / ...
+            sqrt( B.* sum(sum( (Y-mean(Y(:),'omitnan')).^2,'omitnan'),'omitnan') );
+        %cosine similarity correlation
+    case 'cosxcorr'
+        [xg,yg]=gradient(refTile);
+        A=sign(xg+1i*yg);
+        [xg,yg]=gradient(searchTile);
+        searchTile=sign(xg+1i*yg);
+        B=0;
+        fun = @(A,B,Y) mean(mean( real( conj(A).*Y ),'omitnan'),'omitnan') + B;
+    otherwise
+        error('unrecognised method')
+end
+%loop to compute similarity matrix
+[row,col]=size(DCC);
+parfor ii=1:row
+    for jj=1:col
+        localTile = searchTile(ii:ii+refRow-1,jj:jj+refCol-1);
+        DCC(ii,jj) = fun(A,B,localTile);
+    end
+end
+
+if OverSmplFactor==1
+    %identify the shift position
+    [~,POS] = max(DCC(:));
+    DY = Y(POS);
+    DX = X(POS);
+else
+    %compute the subpixel displacement
+    [DX,DY] = subpixOffset(DCC,searchBand,OverSmplFactor);
+end
+
+end
+%--------------------------------------------------------------------------
+
+%--------------------------------------------------------------------------
+function [DxSubPix,DySubPix] = subpixOffset(DCC,searchBand,OverSmplFactor)
+
+% Adapted from
+%
+%    Debella-Gilo, M., & Kääb, A. (2011).
+%    Sub-pixel precision image matching for measuring surface displacements
+%    on mass movements using normalized cross-correlation.
+%    Remote Sensing of Environment, 115(1), 130-142.
+%
+RowOffset=searchBand(3);
+ColOffset=searchBand(1);
+
+%identify the shift position
+[~,POS] = max(DCC(:));
+[I,J] = ind2sub(size(DCC),POS);
+FirstApproxRow = I+RowOffset-1;
+FirstApproxCol = J+ColOffset-1;
+
+% pad of NaNs of DCC and then interp only on non-Nan values
+% try if 3x3 matrix is sufficient to interpolate
+% otherwise use 5x5 matrix
+try
+    %find the 3x3 area around the maximum of DCC
+    I1 = I-1;
+    I2 = I+1;
+    J1 = J-1;
+    J2 = J+1;
+    %limits of the 3x3 area
+    xi=-1;xf=1;
+    yi=-1;yf=1;
+    DCCnan = nanpadding(DCC,1);
+    InterpArea = DCCnan(I1+1:I2+1,J1+1:J2+1);
+    [JJ,II]=meshgrid(xi:xf,yi:yf);
+    os = 1/OverSmplFactor;
+    [nJJ,nII]=meshgrid(xi:os:xf,yi:os:yf);
+    output=interp2(JJ,II,InterpArea,nJJ,nII,'cubic',nan);
+catch
+    %find the 5x5 area around the maximum of DCC
+    I1 = I-2;
+    I2 = I+2;
+    J1 = J-2;
+    J2 = J+2;
+    %limits of the 5x5 area
+    xi=-2;xf=2;
+    yi=-2;yf=2;
+    DCCnan = nanpadding(DCC,2);
+    InterpArea = DCCnan(I1+2:I2+2,J1+2:J2+2);
+    [JJ,II]=meshgrid(xi:xf,yi:yf);
+    os = 1/OverSmplFactor;
+    [nJJ,nII]=meshgrid(xi:os:xf,yi:os:yf);
+    output=interp2(JJ,II,InterpArea,nJJ,nII,'cubic',nan);
+end
+
+%evaluate the position of the maximum
+[~,POSgauss] = max(output(:));
+[relDY,relDX] = ind2sub(size(nJJ),POSgauss);
+subpixelDX = nJJ(relDY,relDX);
+subpixelDY = nII(relDY,relDX);
+%compute the actual shift
+DxSubPix = FirstApproxCol+subpixelDX;
+DySubPix = FirstApproxRow+subpixelDY;
+
+end
+%--------------------------------------------------------------------------
+
+%--------------------------------------------------------------------------
+function out = nanpadding(in,padsz)
+
+[rw,cl]=size(in);
+
+out = [nan(padsz,cl+2*padsz);
+    nan(rw,padsz), in, nan(rw,padsz);
+    nan(padsz,cl+2*padsz)];
+
+end
+%--------------------------------------------------------------------------
 
 
